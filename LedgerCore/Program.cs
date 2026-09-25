@@ -7,6 +7,7 @@ using LedgerCore.Application.Interface;
 using LedgerCore.Application.Services;
 using LedgerCore.Application.Settings;
 using LedgerCore.Domain.IRepository;
+using LedgerCore.Middleware;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -143,6 +144,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 

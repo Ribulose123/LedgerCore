@@ -15,15 +15,8 @@ namespace LedgerCore.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<AuthResult>> Login(LoginRequest request)
         {
-            try
-            {
-                var result = await _authService.LoginAsync(request.Email, request.Password); 
-                return Ok(result);
-            }
-            catch (InvalidCredentialsException)
-            {
-                return Unauthorized(new { message = "Invalid credentials." });
-            }
+            var result = await _authService.LoginAsync(request.Email, request.Password);
+            return Ok(result);
         }
     }
 }
