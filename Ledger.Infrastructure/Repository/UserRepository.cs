@@ -27,7 +27,7 @@ namespace Ledger.Persistence.Repository
 
         public async Task<User?> GetUserByEmail(string email)
         {
-            return await _context.Users.FirstOrDefaultAsync(c => c.Email == email);
+            return await _context.Users.Include(e=> e.Roles).FirstOrDefaultAsync(c => c.Email == email);
         }
 
         public async Task AddUser(User user)

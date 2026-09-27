@@ -72,7 +72,7 @@ namespace LedgerCore.Domain.Entities.Token
             ReplacedByTokenId = newTokenId;
         }
 
-        public void RevokeToken()
+        public void Revoke()
         {
             if (RevokedAt.HasValue)
                 throw new InvalidOperationException(

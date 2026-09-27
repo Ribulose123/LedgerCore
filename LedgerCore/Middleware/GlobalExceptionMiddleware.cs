@@ -68,6 +68,13 @@ namespace LedgerCore.Middleware
                         "The account number already exists.",
                         true
                     ),
+                    InvalidRefreshTokenException =>
+                    (
+                    StatusCodes.Status401Unauthorized,
+                    "Invalid refresh token",
+                    "The refresh token is invaild or can't be used",
+                    false
+                    ),
 
                 DuplicateEmailException =>
                     (
