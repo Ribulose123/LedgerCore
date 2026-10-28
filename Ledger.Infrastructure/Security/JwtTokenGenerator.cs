@@ -1,4 +1,6 @@
-﻿using LedgerCore.Application.Interface;
+﻿
+using LedgerCore.Application.Constants;
+using LedgerCore.Application.Interface;
 using LedgerCore.Application.Settings;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -8,7 +10,7 @@ using System.Text;
 
 namespace Ledger.Persistence.Security
 {
-    public class JwtTokenGenerator:IJwtTokenGenerator
+    public class JwtTokenGenerator : IJwtTokenGenerator
     {
         private readonly JwtSettings _jwtSettings;
 
@@ -18,17 +20,19 @@ namespace Ledger.Persistence.Security
         }
 
         public string GenerateAccessToken(
-           Guid userId,
-           Guid roleId)
+            Guid userId,
+            Guid roleId)
         {
-            if(string.IsNullOrWhiteSpace(_jwtSettings.SecretKey))
+            if (string.IsNullOrWhiteSpace(_jwtSettings.SecretKey))
             {
-                throw new InvalidOperationException("Secret key is not configured.");
+                throw new InvalidOperationException(
+                    "Secret key is not configured.");
             }
 
-            if(string.IsNullOrWhiteSpace(_jwtSettings.Issuer))
+            if (string.IsNullOrWhiteSpace(_jwtSettings.Issuer))
             {
-                throw new InvalidOperationException("Issuer is not configured.");
+                throw new InvalidOperationException(
+                    "Issuer is not configured.");
             }
 
             if (string.IsNullOrWhiteSpace(_jwtSettings.Audience))
@@ -37,37 +41,46 @@ namespace Ledger.Persistence.Security
                     "JWT audience is not configured.");
             }
 
-            if(_jwtSettings.AccessTokenExpirationMinutes <= 0)
+            if (_jwtSettings.AccessTokenExpirationMinutes <= 0)
             {
-                throw new InvalidOperationException("Access token expiration is not configured.");
+                throw new InvalidOperationException(
+                    "Access token expiration is not configured.");
             }
 
             var claims = new List<Claim>
             {
-                new(JwtRegisteredClaimNames.Sub,
-                userId.ToString()),
+                new(
+                    JwtRegisteredClaimNames.Sub,
+                    userId.ToString()),
 
-                new(JwtRegisteredClaimNames.Jti,
-                Guid.NewGuid().ToString()),
+                new(
+                    JwtRegisteredClaimNames.Jti,
+                    Guid.NewGuid().ToString()),
 
-                new("role_id",
-                roleId.ToString())
+                new(
+                    JwtClaimTypes.RoleId,
+                    roleId.ToString())
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
-            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var key = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(
+                    _jwtSettings.SecretKey));
+
+            var credentials = new SigningCredentials(
+                key,
+                SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 issuer: _jwtSettings.Issuer,
                 audience: _jwtSettings.Audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
-                signingCredentials:credentials
-                );
+                expires: DateTime.UtcNow.AddMinutes(
+                    _jwtSettings.AccessTokenExpirationMinutes),
+                signingCredentials: credentials
+            );
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
-
-
+            return new JwtSecurityTokenHandler()
+                .WriteToken(token);
         }
     }
 }

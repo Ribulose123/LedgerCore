@@ -1,37 +1,51 @@
-﻿using LedgerCore.Application.Dtos.WalletDtos;
+﻿
+using LedgerCore.Application.Dtos.WalletDtos;
+using LedgerCore.Application.Interface;
 using LedgerCore.Application.Services;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LedgerCore.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class WalletsController : ControllerBase
     {
         private readonly WalletService _walletService;
+        private readonly ICurrentUser _currentUser;
 
-        public WalletsController(WalletService walletService)
+        public WalletsController(
+            WalletService walletService,
+            ICurrentUser currentUser)
         {
             _walletService = walletService;
+            _currentUser = currentUser;
         }
 
         [HttpPost]
-        public async Task<ActionResult<WalletResponse>> CreateWallet([FromBody] CreateWalletRequest request)
+        public async Task<ActionResult<WalletResponse>> CreateWallet(
+            [FromBody] CreateWalletRequest request)
         {
-            var wallet = await _walletService.CreateWallet(request.UserId, request.Currency);
+            var wallet = await _walletService.CreateWallet(
+                _currentUser.UserId,
+                request.Currency);
+
             var response = WalletResponse.FromDomain(wallet);
 
             return CreatedAtAction(
-               nameof(GetWallet),
-               new { accountNumber = wallet.AccountNumber },
-               response);
+                nameof(GetWallet),
+                new { accountNumber = wallet.AccountNumber },
+                response);
         }
 
         [HttpGet("{accountNumber}")]
-        public async Task<ActionResult<WalletResponse>> GetWallet(string accountNumber)
+        public async Task<ActionResult<WalletResponse>> GetWallet(
+            string accountNumber)
         {
-            var wallet = await _walletService.GetByAccountNumber(accountNumber);
+            var wallet = await _walletService
+                .GetByAccountNumber(accountNumber);
+
             if (wallet is null)
                 return NotFound();
 
@@ -39,30 +53,55 @@ namespace LedgerCore.Controllers
         }
 
         [HttpPost("{accountNumber}/disable")]
-        public async Task<IActionResult> Disable(string accountNumber, [FromBody] WalletActionRequest request)
+        public async Task<IActionResult> Disable(
+            string accountNumber,
+            [FromBody] WalletActionRequest request)
         {
-            await _walletService.DisableWallet(accountNumber, request.ActingUserId, request.Reason);
+            await _walletService.DisableWallet(
+                accountNumber,
+                _currentUser.UserId,
+                request.Reason);
+
             return NoContent();
         }
 
         [HttpPost("{accountNumber}/enable")]
-        public async Task<IActionResult> Enable(string accountNumber, [FromBody] WalletActionRequest request)
+        public async Task<IActionResult> Enable(
+            string accountNumber,
+            [FromBody] WalletActionRequest request)
         {
-            await _walletService.EnableWallet(accountNumber, request.ActingUserId, request.Reason);
+            await _walletService.EnableWallet(
+                accountNumber,
+                _currentUser.UserId,
+                request.Reason);
+
             return NoContent();
         }
 
         [HttpPost("{accountNumber}/request-closure")]
-        public async Task<IActionResult> RequestClosure(string accountNumber, [FromBody] WalletActionRequest request)
+        public async Task<IActionResult> RequestClosure(
+            string accountNumber,
+            [FromBody] WalletActionRequest request)
         {
-            await _walletService.RequestClosure(accountNumber, request.ActingUserId, request.Reason);
+            await _walletService.RequestClosure(
+                accountNumber,
+                _currentUser.UserId,
+                request.Reason);
+
             return NoContent();
         }
 
         [HttpPost("{accountNumber}/approve-closure")]
-        public async Task<IActionResult> ApproveClosure(string accountNumber, [FromBody] WalletActionRequest request)
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> ApproveClosure(
+            string accountNumber,
+            [FromBody] WalletActionRequest request)
         {
-            await _walletService.ApproveClosure(accountNumber, request.ActingUserId, request.Reason);
+            await _walletService.ApproveClosure(
+                accountNumber,
+                _currentUser.UserId,
+                request.Reason);
+
             return NoContent();
         }
     }

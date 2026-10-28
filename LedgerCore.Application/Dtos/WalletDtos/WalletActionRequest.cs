@@ -6,5 +6,5 @@ using System.Threading.Tasks;
 
 namespace LedgerCore.Application.Dtos.WalletDtos
 {
-    public record WalletActionRequest(Guid ActingUserId, string? Reason);
+    public record WalletActionRequest( string? Reason);
 }

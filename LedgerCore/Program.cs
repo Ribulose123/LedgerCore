@@ -3,13 +3,19 @@ using Ledger.Persistence.Repository;
 using Ledger.Persistence.Security;
 using Ledger.Persistence.Service;
 using Ledger.Persistence.stubs;
+using LedgerCore.Api.Security;
 using LedgerCore.Application.Interface;
 using LedgerCore.Application.Services;
 using LedgerCore.Application.Settings;
+using LedgerCore.Authorization;
 using LedgerCore.Domain.IRepository;
 using LedgerCore.Middleware;
+using LedgerCore.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json.Serialization;
 
@@ -18,127 +24,129 @@ var builder = WebApplication.CreateBuilder(args);
 // --------------------
 // Application services
 // --------------------
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<IWalletRepository, WalletRepository>();
 builder.Services.AddScoped<IBalanceProvider, StubBalanceProvider>();
 builder.Services.AddScoped<IUserRoleQuery, StubUserRoleQuery>();
 builder.Services.AddScoped<WalletService>();
-
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<UserService>();
-
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddSingleton<ITokenGenerator, TokenGenerator>();
 builder.Services.AddSingleton<ITokenHasher, TokenHasher>();
-
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<IAuthorizationHandler, AdminRoleHandler>();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 
-// --------------------
-// JWT configuration
-// --------------------
-
-builder.Services.Configure<JwtSettings>(
-    builder.Configuration.GetSection("Jwt"));
+builder.Services
+    .AddOptions<JwtSettings>()
+    .Bind(builder.Configuration.GetSection("Jwt"))
+    .Validate(
+        s => !string.IsNullOrWhiteSpace(s.Issuer),
+        "JWT issuer is not configured.")
+    .Validate(
+        s => !string.IsNullOrWhiteSpace(s.Audience),
+        "JWT audience is not configured.")
+    .Validate(
+        s => !string.IsNullOrWhiteSpace(s.SecretKey) &&
+             Encoding.UTF8.GetByteCount(s.SecretKey) >= 32,
+        "JWT secret key must be at least 32 bytes.")
+    .ValidateOnStart();
 
 builder.Services.Configure<RefreshTokenSettings>(
     builder.Configuration.GetSection("RefreshToken"));
 
-builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+builder.Services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
 
-// --------------------
-// Authentication
-// --------------------
-
-var jwtSettings = builder.Configuration
-    .GetSection("Jwt");
-
-var secretKey = jwtSettings["SecretKey"];
-
-if (string.IsNullOrWhiteSpace(secretKey))
-{
-    throw new InvalidOperationException(
-        "JWT secret key is not configured.");
-}
-
-var issuer = jwtSettings["Issuer"];
-
-if (string.IsNullOrWhiteSpace(issuer))
-{
-    throw new InvalidOperationException(
-        "JWT issuer is not configured.");
-}
-
-var audience = jwtSettings["Audience"];
-
-if (string.IsNullOrWhiteSpace(audience))
-{
-    throw new InvalidOperationException(
-        "JWT audience is not configured.");
-}
+builder.Services
+    .AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
 
 builder.Services
     .AddAuthentication("Bearer")
-    .AddJwtBearer("Bearer", options =>
+    .AddJwtBearer("Bearer");
+
+// --------------------
+// Authorization
+// --------------------
+builder.Services.AddAuthorization(options =>
+{
+   
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    options.AddPolicy("AdminOnly", policy =>
     {
-        options.TokenValidationParameters =
-            new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidIssuer = issuer,
-
-                ValidateAudience = true,
-                ValidAudience = audience,
-
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(secretKey)),
-
-                ValidateLifetime = true,
-
-                ClockSkew = TimeSpan.Zero
-            };
+        policy.Requirements.Add(
+            new AdminRoleRequirement());
     });
-
+});
 
 // --------------------
 // Controllers
 // --------------------
-
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()));
 
-
 // --------------------
 // Database
 // --------------------
-
 builder.Services.AddDbContext<AppDbContext>(
     options => options.UseSqlServer(
         builder.Configuration
             .GetConnectionString("DefaultConnection")));
 
-
 // --------------------
 // Swagger
 // --------------------
-
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition(
+        "Bearer",
+        new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "Bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "Enter your JWT access token."
+        });
 
+    options.AddSecurityRequirement(
+        new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
+});
+
+// --------------------
+// Build application
+// --------------------
 var app = builder.Build();
-
 
 // --------------------
 // HTTP request pipeline
 // --------------------
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

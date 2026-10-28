@@ -6,5 +6,5 @@ using System.Threading.Tasks;
 
 namespace LedgerCore.Application.Dtos.WalletDtos
 {
-    public record CreateWalletRequest(Guid UserId, string Currency);
+    public record CreateWalletRequest(string Currency);
 }
